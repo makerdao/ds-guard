@@ -1,6 +1,10 @@
-// guard.sol -- simple whitelist implementation of DSAuthority
+// guard.sol -- simple auth implementation
 
-// Copyright (C) 2017  DappHub, LLC
+// Copyright (C) 2019 Maker Ecosystem Growth Holdings, INC.
+//
+// Original DS-Guard Implementation:
+// source: https://github.com/dapphub/ds-guard
+// Copyright (C) 2017 DappHub, LLC
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,70 +19,58 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity >=0.4.23;
+pragma solidity >=0.5.0;
 
-import "ds-auth/auth.sol";
+contract DSGuard {
+    address public owner;
+    mapping (address => mapping (address => mapping (bytes32 => bool))) acl;
 
-contract DSGuardEvents {
+    event LogSetOwner (address indexed owner);
+
     event LogPermit(
-        bytes32 indexed src,
-        bytes32 indexed dst,
+        address indexed src,
+        address indexed dst,
         bytes32 indexed sig
     );
 
     event LogForbid(
-        bytes32 indexed src,
-        bytes32 indexed dst,
+        address indexed src,
+        address indexed dst,
         bytes32 indexed sig
     );
-}
 
-contract DSGuard is DSAuth, DSAuthority, DSGuardEvents {
-    bytes32 constant public ANY = bytes32(uint(-1));
+    constructor() public {
+        owner = msg.sender;
+        emit LogSetOwner(msg.sender);
+    }
 
-    mapping (bytes32 => mapping (bytes32 => mapping (bytes32 => bool))) acl;
+    modifier auth {
+        require(msg.sender == owner, "dss-guard-unauthorized");
+        _;
+    }
 
     function canCall(
-        address src_, address dst_, bytes4 sig
+        address src, address dst, bytes4 sig
     ) public view returns (bool) {
-        bytes32 src = bytes32(bytes20(src_));
-        bytes32 dst = bytes32(bytes20(dst_));
 
-        return acl[src][dst][sig]
-            || acl[src][dst][ANY]
-            || acl[src][ANY][sig]
-            || acl[src][ANY][ANY]
-            || acl[ANY][dst][sig]
-            || acl[ANY][dst][ANY]
-            || acl[ANY][ANY][sig]
-            || acl[ANY][ANY][ANY];
+        return acl[src][dst][sig];
     }
 
-    function permit(bytes32 src, bytes32 dst, bytes32 sig) public auth {
-        acl[src][dst][sig] = true;
-        emit LogPermit(src, dst, sig);
+    function setOwner(address owner_)
+        public
+        auth
+    {
+        owner = owner_;
+        emit LogSetOwner(owner);
     }
 
-    function forbid(bytes32 src, bytes32 dst, bytes32 sig) public auth {
+    function forbid(address src, address dst, bytes32 sig) public auth {
         acl[src][dst][sig] = false;
         emit LogForbid(src, dst, sig);
     }
 
-    function permit(address src, address dst, bytes32 sig) public {
-        permit(bytes32(bytes20(src)), bytes32(bytes20(dst)), sig);
-    }
-    function forbid(address src, address dst, bytes32 sig) public {
-        forbid(bytes32(bytes20(src)), bytes32(bytes20(dst)), sig);
-    }
-
-}
-
-contract DSGuardFactory {
-    mapping (address => bool)  public  isGuard;
-
-    function newGuard() public returns (DSGuard guard) {
-        guard = new DSGuard();
-        guard.setOwner(msg.sender);
-        isGuard[address(guard)] = true;
+    function permit(address src, address dst, bytes32 sig) public auth {
+        acl[src][dst][sig] = true;
+        emit LogPermit(src, dst, sig);
     }
 }
