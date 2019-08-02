@@ -52,7 +52,6 @@ contract DSGuard {
     function canCall(
         address src, address dst, bytes4 sig
     ) public view returns (bool) {
-
         return acl[src][dst][sig];
     }
 

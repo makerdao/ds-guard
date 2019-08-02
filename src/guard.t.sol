@@ -1,6 +1,10 @@
 // guard.t.sol -- tests for guard.sol
 
-// Copyright (C) 2017  DappHub, LLC
+// Copyright (C) 2019 Maker Ecosystem Growth Holdings, INC.
+//
+// Original DS-Guard Implementation:
+// source: https://github.com/dapphub/ds-guard
+// Copyright (C) 2017 DappHub, LLCC
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,36 +25,42 @@ import "ds-test/test.sol";
 
 import "./guard.sol";
 
-contract DSGuardTest is DSTest {
-    DSGuardFactory  factory;
-    DSGuard         guard;
+contract FakeGuard is DSGuard {
+    function access() public view auth {}
+}
+
+contract DSGuardTest is DSTest, DSGuard {
+    FakeGuard guard;
+    bytes4 sig = bytes4(keccak256("test()"));
 
     function setUp() public {
-        factory = new DSGuardFactory();
-        guard = factory.newGuard();
+        guard = new FakeGuard();
     }
 
-    function testFactorySetup() public {
-        assertTrue(factory.isGuard(address(guard)));
+    function test_owner() public {
+        guard.setOwner(address(0));
     }
-    function testPermitAny() public {
-        guard.permit(bytes32(bytes20(address(this))), guard.ANY(), guard.ANY());
-        assertTrue(guard.canCall(address(this), address(0x1234), 0x12345678));
+
+    function testFail_non_owner_1() public {
+        guard.setOwner(address(0));
+        guard.access();
     }
-    function testForbidAny() public {
-        guard.permit(bytes32(bytes20(address(this))), guard.ANY(), guard.ANY());
-        guard.forbid(bytes32(bytes20(address(this))), guard.ANY(), guard.ANY());
-        assertTrue(!guard.canCall(address(this), address(0x1234), 0x12345678));
+
+    function testFail_non_owner_2() public {
+        guard.setOwner(address(0));
+        guard.setOwner(address(0));
     }
+
     function testPermitAddress() public {
-        guard.permit(address(this), address(0x1234), guard.ANY());
-        assertTrue(guard.canCall(address(this), address(0x1234), 0x12345678));
-        assertTrue(!guard.canCall(address(this), address(0x5678), 0x12345678));
+        guard.permit(address(this), address(0x1234), sig);
+        assertTrue(guard.canCall(address(this), address(0x1234), sig));
+        assertTrue(!guard.canCall(address(this), address(0x5678), sig));
     }
+
     function testForbidAddress() public {
-        guard.permit(address(this), address(0x1234), guard.ANY());
-        assertTrue(guard.canCall(address(this), address(0x1234), 0x12345678));
-        guard.forbid(address(this), address(0x1234), guard.ANY());
-        assertTrue(!guard.canCall(address(this), address(0x1234), 0x12345678));
+        guard.permit(address(this), address(0x1234), sig);
+        assertTrue(guard.canCall(address(this), address(0x1234), sig));
+        guard.forbid(address(this), address(0x1234), sig);
+        assertTrue(!guard.canCall(address(this), address(0x1234), sig));
     }
 }
